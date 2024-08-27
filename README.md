@@ -1,7 +1,7 @@
 # siddump-go
 A Go version of the siddump tool!
 
-I wanted to learn more about Go and decided to port the excellent siddump tool that exists in the public domain in C, to Go. This porject will most certainly evolve as I get more proficient in Go. :)
+I wanted to learn more about Go and decided to port the excellent siddump tool that exists in the public domain in C, to Go. This project will most certainly evolve as I get more proficient in Go. :)
 
 Feel free to come with suggestions for improvements.
 
