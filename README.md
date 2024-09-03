@@ -5,7 +5,7 @@ I wanted to learn more about Go and decided to port the excellent siddump tool t
 
 Feel free to come with suggestions for improvements.
 
-For the 6502 chip emulation, I did not go with the original code but rather used an existing Go library found here:
+For the 6502 chip emulation, I did not recreate this but rather used an existing Go library found here:
 https://github.com/beevik/go6502
 
 Thanks to the author for providing this, seems to work nicely!
