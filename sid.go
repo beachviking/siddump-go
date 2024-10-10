@@ -89,13 +89,13 @@ func (sid *Sid) CopyFromCpu(cpu *cpu.CPU) {
 		sid.Register[i] = cpu.Mem.LoadByte(uint16(0xD400+i))
 	}
 
-	if (cpu.Mem.LoadByte(0xdc05) == 0 && cpu.Mem.LoadByte(0xdc04) == 0) {
-		// Most likely vbi driven, ie. 20000us
+	if (cpu.Mem.LoadByte(0xDC05) == 0 && cpu.Mem.LoadByte(0xDC04) == 0) {
+		// Most likely vbi driven, ie. 20000us. Assume PAL, 50Hz.
 		sid.Register[25] = 0x4e; // dt HI
 		sid.Register[26] = 0x20; // dt LO
-	  } else {
+	} else {
 		// CIA timer is used to control updates...
-		sid.Register[25] = cpu.Mem.LoadByte(0xdc05) // dt HI
-		sid.Register[26] = cpu.Mem.LoadByte(0xdc04) // dt LO
-	  }
+		sid.Register[25] = cpu.Mem.LoadByte(0xDC05) // dt HI
+		sid.Register[26] = cpu.Mem.LoadByte(0xDC04) // dt LO
+	}
 }

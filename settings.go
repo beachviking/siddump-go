@@ -18,6 +18,10 @@ type SidOutputSettings struct {
 	DecoderOutput int
 }
 
+func NewSidOutputSettings() *SidOutputSettings {
+	opt := &SidOutputSettings{}
+	return opt
+}
 func (opt *SidOutputSettings) ParseArgs() {
 	flag.IntVar(&opt.Subtune, "a", 0, "Accumulator value on init (subtune number) default = 0")
 	flag.IntVar(&opt.Basefreq, "c", 0, "Frequency recalibration. Give note frequency in hex")

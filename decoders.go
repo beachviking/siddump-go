@@ -1,7 +1,10 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
+	"log"
+	"os"
 	"strings"
 )
 
@@ -13,28 +16,28 @@ type SidOutputDecoder interface {
 }
 
 type ActiveDecoder struct {
-    decoder SidOutputDecoder
+	decoder SidOutputDecoder
 }
 
 func (d *ActiveDecoder) SetOutput(dec SidOutputDecoder) {
-    d.decoder = dec
+	d.decoder = dec
 }
 
 func (d *ActiveDecoder) PreProcess() {
-    d.decoder.PreSteps()
+	d.decoder.PreSteps()
 }
 
 func (d *ActiveDecoder) ProcessFrame(frame int, cycles uint64) {
-    d.decoder.ProcessFrame(frame, cycles)
+	d.decoder.ProcessFrame(frame, cycles)
 }
 
 func (d *ActiveDecoder) PostProcess() {
-    d.decoder.PostSteps()
+	d.decoder.PostSteps()
 }
 
 type ScreenOutputWithNotes struct {
-	Options        *SidOutputSettings
-	SidState       *Sid
+	Options  *SidOutputSettings
+	SidState *Sid
 
 	prevSidState [2]*Sid
 	counter      int
@@ -59,6 +62,12 @@ func (state *ScreenOutputWithNotes) PreSteps() {
 		fmt.Printf("------------+")
 	}
 	fmt.Printf("\n")
+
+	// Check other parameters for correctness
+	if ((state.Options.Lowres == 1) && (state.Options.Spacing == 0)) {
+		state.Options.Lowres = 0
+	}
+
 }
 
 func (state *ScreenOutputWithNotes) ProcessFrame(frame int, cycles uint64) {
@@ -84,7 +93,7 @@ func (state *ScreenOutputWithNotes) ProcessFrame(frame int, cycles uint64) {
 		currWave := currentSid.Channel[i].Wave
 		prev2Wave := prev2Sid.Channel[i].Wave
 		if currWave >= 0x10 {
-			if (currWave&1 == 1) && (((prev2Wave & 1) == 0) || (prev2Wave < 0x10)) {
+			if (currWave & 1 == 1) && (((prev2Wave & 1) == 0) || (prev2Wave < 0x10)) {
 				prev2Sid.Channel[i].Note = -1
 			}
 		}
@@ -195,8 +204,6 @@ func (state *ScreenOutputWithNotes) ProcessFrame(frame int, cycles uint64) {
 
 	// Rasterlines / cycle count
 	if opt.Profiling != 0 {
-		// cycles := cpu.Cycles
-		//cycles := state.CyclesForFrame
 		rasterlines := (cycles + 62) / 63
 		badlines := ((cycles + 503) / 504)
 		rasterlinesbad := (badlines*40 + cycles + 62) / 63
@@ -206,33 +213,46 @@ func (state *ScreenOutputWithNotes) ProcessFrame(frame int, cycles uint64) {
 	// End of frame display, print info so far and copy SID registers to old registers
 	sb.WriteString("|\n")
 
-	if (opt.Lowres != 0) || (((time) % opt.Spacing) == 0) {
-		fmt.Print(sb.String())
-		prevSid.CopyFrom(currentSid)
+	switch {
+		case opt.Lowres != 0, opt.Spacing == 0:
+			fmt.Print(sb.String())
+			prevSid.CopyFrom(currentSid)
+		case (frame - opt.Firstframe) % opt.Spacing == 0:
+			fmt.Print(sb.String())
+			prevSid.CopyFrom(currentSid)
 	}
+
 	prev2Sid.CopyFrom(currentSid)
 
-	// Print note/pattern separators
-	if opt.Spacing != 0 {
-		state.counter++
-		if state.counter >= opt.Spacing {
-			state.counter = 0
-			if opt.Pattspacing != 0 {
-				state.rows++
-				if state.rows >= opt.Pattspacing {
-					state.rows = 0
-					fmt.Printf("+=======+===========================+===========================+===========================+===============+\n")
-				} else {
-					if opt.Lowres != 0 {
-						fmt.Printf("+-------+---------------------------+---------------------------+---------------------------+---------------+\n")
-					}
-				}
-			} else {
-				if opt.Lowres != 0 {
-					fmt.Printf("+-------+---------------------------+---------------------------+---------------------------+---------------+\n")
-				}
-			}
+	// Print note/pattern separators, if needed
+	if opt.Spacing == 0 {
+		return
+	}
+
+	state.counter++
+
+	if state.counter < opt.Spacing {
+		return
+	}
+
+	state.counter = 0
+
+	if opt.Pattspacing == 0 {
+		if opt.Lowres != 0 {
+			fmt.Printf("+-------+---------------------------+---------------------------+---------------------------+---------------+\n")
 		}
+		return
+	}
+
+	state.rows++
+	if state.rows >= opt.Pattspacing {
+		state.rows = 0
+		fmt.Printf("+=======+===========================+===========================+===========================+===============+\n")
+		return
+	}
+
+	if opt.Lowres != 0 {
+		fmt.Printf("+-------+---------------------------+---------------------------+---------------------------+---------------+\n")
 	}
 }
 
@@ -241,20 +261,18 @@ func (state *ScreenOutputWithNotes) PostSteps() {}
 // struct to implement decoder for screen output with notes
 // info.
 type ScreenOutputSidRegisters struct {
-	Options        *SidOutputSettings
-	SidState       *Sid
+	Options  *SidOutputSettings
+	SidState *Sid
 
 	prevSidState *Sid
-	// counter      int
-	// rows         int
 }
 
 func (state *ScreenOutputSidRegisters) PreSteps() {
 	state.prevSidState = NewSID()
-	fmt.Printf("| Frame | 00 01 02 03 04 05 06 | 07 08 09 10 11 12 13 | 14 15 16 17 18 19 20 | 21 22 23 24 | dt_us |");
-	fmt.Printf("\n");
-	fmt.Printf("+-------+----+-----------------+----------------------+----------------------+-------------+-------+");
-	fmt.Printf("\n");
+	fmt.Printf("| Frame | 00 01 02 03 04 05 06 | 07 08 09 10 11 12 13 | 14 15 16 17 18 19 20 | 21 22 23 24 | dt_us |")
+	fmt.Printf("\n")
+	fmt.Printf("+-------+----+-----------------+----------------------+----------------------+-------------+-------+")
+	fmt.Printf("\n")
 }
 func (state *ScreenOutputSidRegisters) ProcessFrame(frame int, cycles uint64) {
 	var sb strings.Builder
@@ -272,21 +290,50 @@ func (state *ScreenOutputSidRegisters) ProcessFrame(frame int, cycles uint64) {
 
 	// Check registers for changes, print the ones that have changed
 	for c := 0; c < 25; c++ {
-		if ((currentSid.Register[c] != prevSid.Register[c]) || (time == 0)) {
+		if (currentSid.Register[c] != prevSid.Register[c]) || (time == 0) {
 			sb.WriteString(fmt.Sprintf("%02X ", currentSid.Register[c]))
 		} else {
 			sb.WriteString(".. ")
 		}
 
-		if (c==6 || c==13 || c==20) {
-			sb.WriteString("| ")	
+		if c == 6 || c == 13 || c == 20 {
+			sb.WriteString("| ")
 		}
 
-		prevSid.Register[c] = currentSid.Register[c];
-	} 
-	sb.WriteString(fmt.Sprintf("|  %04X ", (uint16(currentSid.Register[25]) << 8) | uint16(currentSid.Register[26])))
-	sb.WriteString("|\n");
+		prevSid.Register[c] = currentSid.Register[c]
+	}
+	sb.WriteString(fmt.Sprintf("|  %04X ", (uint16(currentSid.Register[25])<<8)|uint16(currentSid.Register[26])))
+	sb.WriteString("|\n")
 	fmt.Print(sb.String())
 }
 
 func (state *ScreenOutputSidRegisters) PostSteps() {}
+
+type BinFileRegistersAndDtDumps struct {
+	Options  *SidOutputSettings
+	SidState *Sid
+
+	fileName   string
+	fileHandle *os.File
+}
+
+func (state *BinFileRegistersAndDtDumps) PreSteps() {
+	var err error
+	// state.fileName = "sidtune.dmp"
+	state.fileHandle, err = os.Create(state.fileName)
+	check(err)
+}
+
+func (state *BinFileRegistersAndDtDumps) ProcessFrame(frame int, cycles uint64) {
+
+	err := binary.Write(state.fileHandle, binary.BigEndian, state.SidState.Register[:])
+
+	if err != nil {
+		log.Fatal(err)
+		state.fileHandle.Close()
+	}
+}
+
+func (state *BinFileRegistersAndDtDumps) PostSteps() {
+	state.fileHandle.Close()
+}

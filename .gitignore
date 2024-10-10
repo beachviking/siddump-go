@@ -30,3 +30,4 @@ go.work.sum
 # Misc
 /tmp/
 siddump
+*.dmp
